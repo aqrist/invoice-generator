@@ -6,11 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Invoice extends Model
 {
     /** @use HasFactory<\Database\Factories\InvoiceFactory> */
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'user_id',
@@ -71,7 +72,7 @@ class Invoice extends Model
         $year = now()->year;
         $prefix = 'INV';
 
-        $lastInvoice = static::query()
+        $lastInvoice = static::withTrashed()
             ->where('invoice_number', 'like', "{$prefix}-{$year}-%")
             ->orderByDesc('invoice_number')
             ->first();

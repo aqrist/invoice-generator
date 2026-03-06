@@ -173,12 +173,71 @@ new #[Title('Invoice')] class extends Component {
                     <flux:input wire:model="reference" :label="__('Reference')" />
                 </div>
                 <div class="mt-4 grid gap-4 md:grid-cols-3">
-                    <flux:select wire:model="customer_id" :label="__('Customer')">
-                        <option value="">{{ __('Select Customer') }}</option>
-                        @foreach ($customers as $customer)
-                            <option value="{{ $customer->id }}">{{ $customer->name }} {{ $customer->company ? "({$customer->company})" : '' }}</option>
-                        @endforeach
-                    </flux:select>
+                    <flux:field>
+                        <flux:label>{{ __('Customer') }}</flux:label>
+                        <div x-data="{
+                            open: false,
+                            search: '',
+                            selected: @js($customer_id),
+                            customers: @js($customers->map(fn ($c) => ['id' => $c->id, 'label' => $c->name . ($c->company ? ' (' . $c->company . ')' : '')])->values()),
+                            get filtered() {
+                                if (!this.search) return this.customers;
+                                return this.customers.filter(c => c.label.toLowerCase().includes(this.search.toLowerCase()));
+                            },
+                            get selectedLabel() {
+                                const c = this.customers.find(c => c.id === this.selected);
+                                return c ? c.label : '';
+                            },
+                            select(id) {
+                                this.selected = id;
+                                this.open = false;
+                                this.search = '';
+                                $wire.set('customer_id', id);
+                            },
+                            clear() {
+                                this.selected = null;
+                                this.search = '';
+                                $wire.set('customer_id', null);
+                            }
+                        }" x-on:click.outside="open = false" class="relative">
+                            <div class="relative">
+                                <input
+                                    type="text"
+                                    x-show="open"
+                                    x-ref="searchInput"
+                                    x-model="search"
+                                    x-on:keydown.escape="open = false"
+                                    placeholder="{{ __('Search customer...') }}"
+                                    class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-zinc-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                                />
+                                <button
+                                    type="button"
+                                    x-show="!open"
+                                    x-on:click="open = true; $nextTick(() => $refs.searchInput.focus())"
+                                    class="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-sm shadow-sm hover:border-zinc-300 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                                >
+                                    <span x-text="selectedLabel || '{{ __('Select Customer') }}'" :class="!selected && 'text-zinc-400 dark:text-zinc-500'"></span>
+                                    <div class="flex items-center gap-1">
+                                        <svg x-show="selected" x-on:click.stop="clear()" class="h-4 w-4 text-zinc-400 hover:text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        <svg class="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                                    </div>
+                                </button>
+                            </div>
+                            <div x-show="open" x-transition class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-600 dark:bg-zinc-800">
+                                <template x-for="c in filtered" :key="c.id">
+                                    <button
+                                        type="button"
+                                        x-on:click="select(c.id)"
+                                        x-text="c.label"
+                                        :class="selected === c.id ? 'bg-zinc-100 dark:bg-zinc-700' : ''"
+                                        class="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                                    ></button>
+                                </template>
+                                <div x-show="filtered.length === 0" class="px-3 py-2 text-sm text-zinc-400">{{ __('No customers found.') }}</div>
+                            </div>
+                        </div>
+                        <flux:error name="customer_id" />
+                    </flux:field>
                     <flux:select wire:model="payment_method_id" :label="__('Payment Method')">
                         <option value="">{{ __('Select Payment Method') }}</option>
                         @foreach ($paymentMethods as $method)
@@ -208,7 +267,7 @@ new #[Title('Invoice')] class extends Component {
                                     <flux:input wire:model="items.{{ $index }}.item_name" :label="__('Item Name')" required size="sm" />
                                 </div>
                                 <div class="md:col-span-3">
-                                    <flux:input wire:model="items.{{ $index }}.description" :label="__('Description')" size="sm" />
+                                    <flux:textarea wire:model="items.{{ $index }}.description" :label="__('Description')" size="sm" rows="2" />
                                 </div>
                                 <div class="md:col-span-1">
                                     <flux:input wire:model.live="items.{{ $index }}.quantity" :label="__('Qty')" type="number" min="1" required size="sm" />

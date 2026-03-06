@@ -8,10 +8,21 @@ use Livewire\Component;
 new #[Title('Invoices')] class extends Component {
     public string $search = '';
     public string $statusFilter = '';
+    public bool $showTrashed = false;
 
     public function deleteInvoice(int $invoiceId): void
     {
         Auth::user()->invoices()->findOrFail($invoiceId)->delete();
+    }
+
+    public function forceDeleteInvoice(int $invoiceId): void
+    {
+        Auth::user()->invoices()->onlyTrashed()->findOrFail($invoiceId)->forceDelete();
+    }
+
+    public function restoreInvoice(int $invoiceId): void
+    {
+        Auth::user()->invoices()->onlyTrashed()->findOrFail($invoiceId)->restore();
     }
 
     public function markAs(int $invoiceId, string $status): void
@@ -22,14 +33,17 @@ new #[Title('Invoices')] class extends Component {
 
     public function with(): array
     {
+        $query = Auth::user()->invoices()
+            ->with('customer')
+            ->when($this->showTrashed, fn ($q) => $q->onlyTrashed())
+            ->when($this->search, fn ($query) => $query->where('invoice_number', 'like', "%{$this->search}%")
+                ->orWhereHas('customer', fn ($q) => $q->where('name', 'like', "%{$this->search}%")))
+            ->when($this->statusFilter, fn ($query) => $query->where('status', $this->statusFilter))
+            ->latest('invoice_date');
+
         return [
-            'invoices' => Auth::user()->invoices()
-                ->with('customer')
-                ->when($this->search, fn ($query) => $query->where('invoice_number', 'like', "%{$this->search}%")
-                    ->orWhereHas('customer', fn ($q) => $q->where('name', 'like', "%{$this->search}%")))
-                ->when($this->statusFilter, fn ($query) => $query->where('status', $this->statusFilter))
-                ->latest('invoice_date')
-                ->paginate(10),
+            'invoices' => $query->paginate(10),
+            'trashedCount' => Auth::user()->invoices()->onlyTrashed()->count(),
         ];
     }
 }; ?>
@@ -42,7 +56,7 @@ new #[Title('Invoices')] class extends Component {
             </flux:button>
         </div>
 
-        <div class="flex flex-col gap-4 sm:flex-row">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
             <div class="flex-1">
                 <flux:input wire:model.live.debounce.300ms="search" icon="magnifying-glass" :placeholder="__('Search invoices...')" />
             </div>
@@ -53,6 +67,11 @@ new #[Title('Invoices')] class extends Component {
                 <option value="paid">{{ __('Paid') }}</option>
                 <option value="overdue">{{ __('Overdue') }}</option>
             </flux:select>
+            @if ($trashedCount > 0 || $showTrashed)
+                <flux:button size="sm" :variant="$showTrashed ? 'primary' : 'ghost'" wire:click="$toggle('showTrashed')">
+                    {{ __('Trash') }} ({{ $trashedCount }})
+                </flux:button>
+            @endif
         </div>
 
         <div class="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
@@ -70,7 +89,7 @@ new #[Title('Invoices')] class extends Component {
                 </thead>
                 <tbody class="divide-y divide-zinc-200 bg-white dark:divide-zinc-700 dark:bg-zinc-900">
                     @forelse ($invoices as $invoice)
-                        <tr wire:key="invoice-{{ $invoice->id }}">
+                        <tr wire:key="invoice-{{ $invoice->id }}" @class(['opacity-60' => $invoice->trashed()])>
                             <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
                                 {{ $invoice->invoice_number }}
                             </td>
@@ -100,25 +119,36 @@ new #[Title('Invoices')] class extends Component {
                                 </flux:badge>
                             </td>
                             <td class="whitespace-nowrap px-6 py-4 text-right text-sm">
-                                <flux:dropdown>
-                                    <flux:button size="sm" variant="ghost" icon="ellipsis-vertical" />
-                                    <flux:menu>
-                                        <flux:menu.item icon="eye" :href="route('invoices.show', $invoice)" wire:navigate>{{ __('View') }}</flux:menu.item>
-                                        <flux:menu.item icon="pencil-square" :href="route('invoices.edit', $invoice)" wire:navigate>{{ __('Edit') }}</flux:menu.item>
-                                        <flux:menu.item icon="arrow-down-tray" :href="route('invoices.pdf', $invoice)">{{ __('Download PDF') }}</flux:menu.item>
-                                        <flux:menu.separator />
-                                        <flux:menu.item icon="paper-airplane" wire:click="markAs({{ $invoice->id }}, 'sent')">{{ __('Mark as Sent') }}</flux:menu.item>
-                                        <flux:menu.item icon="check-circle" wire:click="markAs({{ $invoice->id }}, 'paid')">{{ __('Mark as Paid') }}</flux:menu.item>
-                                        <flux:menu.separator />
-                                        <flux:menu.item icon="trash" variant="danger" wire:click="deleteInvoice({{ $invoice->id }})" wire:confirm="{{ __('Are you sure?') }}">{{ __('Delete') }}</flux:menu.item>
-                                    </flux:menu>
-                                </flux:dropdown>
+                                @if ($invoice->trashed())
+                                    <div class="flex justify-end gap-1">
+                                        <flux:button size="sm" variant="ghost" icon="arrow-uturn-left" wire:click="restoreInvoice({{ $invoice->id }})" wire:confirm="{{ __('Restore this invoice?') }}">
+                                            {{ __('Restore') }}
+                                        </flux:button>
+                                        <flux:button size="sm" variant="ghost" icon="trash" wire:click="forceDeleteInvoice({{ $invoice->id }})" wire:confirm="{{ __('Permanently delete this invoice? This cannot be undone.') }}">
+                                            {{ __('Delete Forever') }}
+                                        </flux:button>
+                                    </div>
+                                @else
+                                    <flux:dropdown>
+                                        <flux:button size="sm" variant="ghost" icon="ellipsis-vertical" />
+                                        <flux:menu>
+                                            <flux:menu.item icon="eye" :href="route('invoices.show', $invoice)" wire:navigate>{{ __('View') }}</flux:menu.item>
+                                            <flux:menu.item icon="pencil-square" :href="route('invoices.edit', $invoice)" wire:navigate>{{ __('Edit') }}</flux:menu.item>
+                                            <flux:menu.item icon="arrow-down-tray" :href="route('invoices.pdf', $invoice)">{{ __('Download PDF') }}</flux:menu.item>
+                                            <flux:menu.separator />
+                                            <flux:menu.item icon="paper-airplane" wire:click="markAs({{ $invoice->id }}, 'sent')">{{ __('Mark as Sent') }}</flux:menu.item>
+                                            <flux:menu.item icon="check-circle" wire:click="markAs({{ $invoice->id }}, 'paid')">{{ __('Mark as Paid') }}</flux:menu.item>
+                                            <flux:menu.separator />
+                                            <flux:menu.item icon="trash" variant="danger" wire:click="deleteInvoice({{ $invoice->id }})" wire:confirm="{{ __('Are you sure? The invoice will be moved to trash.') }}">{{ __('Delete') }}</flux:menu.item>
+                                        </flux:menu>
+                                    </flux:dropdown>
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
                             <td colspan="7" class="px-6 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                                {{ __('No invoices found.') }}
+                                {{ $showTrashed ? __('Trash is empty.') : __('No invoices found.') }}
                             </td>
                         </tr>
                     @endforelse

@@ -88,13 +88,46 @@ test('invoice can be updated', function () {
     ]);
 });
 
-test('invoice can be deleted', function () {
+test('invoice is soft deleted', function () {
     $invoice = Invoice::factory()->create(['user_id' => $this->user->id]);
 
     Livewire::test('pages::invoices.index')
         ->call('deleteInvoice', $invoice->id);
 
+    $this->assertSoftDeleted('invoices', ['id' => $invoice->id]);
+});
+
+test('soft deleted invoice can be restored', function () {
+    $invoice = Invoice::factory()->create(['user_id' => $this->user->id]);
+    $invoice->delete();
+
+    Livewire::test('pages::invoices.index')
+        ->set('showTrashed', true)
+        ->call('restoreInvoice', $invoice->id);
+
+    $this->assertNotSoftDeleted('invoices', ['id' => $invoice->id]);
+});
+
+test('soft deleted invoice can be permanently deleted', function () {
+    $invoice = Invoice::factory()->create(['user_id' => $this->user->id]);
+    $invoice->delete();
+
+    Livewire::test('pages::invoices.index')
+        ->set('showTrashed', true)
+        ->call('forceDeleteInvoice', $invoice->id);
+
     $this->assertDatabaseMissing('invoices', ['id' => $invoice->id]);
+});
+
+test('invoice number skips soft deleted numbers', function () {
+    $invoice = Invoice::factory()->create([
+        'user_id' => $this->user->id,
+        'invoice_number' => 'INV-'.now()->year.'-0001',
+    ]);
+    $invoice->delete();
+
+    $next = Invoice::generateInvoiceNumber();
+    expect($next)->toBe('INV-'.now()->year.'-0002');
 });
 
 test('invoice status can be changed', function () {
