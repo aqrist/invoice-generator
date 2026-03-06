@@ -10,30 +10,37 @@ new #[Title('Invoices')] class extends Component {
     public string $statusFilter = '';
     public bool $showTrashed = false;
 
+    private function invoiceQuery(): \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return Auth::user()->isSuperAdmin()
+            ? Invoice::query()
+            : Auth::user()->invoices();
+    }
+
     public function deleteInvoice(int $invoiceId): void
     {
-        Auth::user()->invoices()->findOrFail($invoiceId)->delete();
+        $this->invoiceQuery()->findOrFail($invoiceId)->delete();
     }
 
     public function forceDeleteInvoice(int $invoiceId): void
     {
-        Auth::user()->invoices()->onlyTrashed()->findOrFail($invoiceId)->forceDelete();
+        $this->invoiceQuery()->onlyTrashed()->findOrFail($invoiceId)->forceDelete();
     }
 
     public function restoreInvoice(int $invoiceId): void
     {
-        Auth::user()->invoices()->onlyTrashed()->findOrFail($invoiceId)->restore();
+        $this->invoiceQuery()->onlyTrashed()->findOrFail($invoiceId)->restore();
     }
 
     public function markAs(int $invoiceId, string $status): void
     {
-        $invoice = Auth::user()->invoices()->findOrFail($invoiceId);
+        $invoice = $this->invoiceQuery()->findOrFail($invoiceId);
         $invoice->update(['status' => $status]);
     }
 
     public function with(): array
     {
-        $query = Auth::user()->invoices()
+        $query = $this->invoiceQuery()
             ->with('customer')
             ->when($this->showTrashed, fn ($q) => $q->onlyTrashed())
             ->when($this->search, fn ($query) => $query->where('invoice_number', 'like', "%{$this->search}%")
@@ -43,7 +50,7 @@ new #[Title('Invoices')] class extends Component {
 
         return [
             'invoices' => $query->paginate(10),
-            'trashedCount' => Auth::user()->invoices()->onlyTrashed()->count(),
+            'trashedCount' => $this->invoiceQuery()->onlyTrashed()->count(),
         ];
     }
 }; ?>

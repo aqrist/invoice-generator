@@ -1,6 +1,8 @@
 <?php
 
+use App\Models\Customer;
 use App\Models\Invoice;
+use App\Models\PaymentMethod;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -28,7 +30,7 @@ new #[Title('Invoice')] class extends Component {
     public function mount(?Invoice $invoice = null): void
     {
         if ($invoice?->exists) {
-            abort_unless($invoice->user_id === Auth::id(), 403);
+            abort_unless($invoice->user_id === Auth::id() || Auth::user()->isSuperAdmin(), 403);
             $this->invoice = $invoice;
             $this->invoice_number = $invoice->invoice_number;
             $this->invoice_date = $invoice->invoice_date->format('Y-m-d');
@@ -150,9 +152,15 @@ new #[Title('Invoice')] class extends Component {
 
     public function with(): array
     {
+        $user = Auth::user();
+
         return [
-            'customers' => Auth::user()->customers()->orderBy('name')->get(),
-            'paymentMethods' => Auth::user()->paymentMethods()->get(),
+            'customers' => $user->isSuperAdmin()
+                ? Customer::query()->orderBy('name')->get()
+                : $user->customers()->orderBy('name')->get(),
+            'paymentMethods' => $user->isSuperAdmin()
+                ? PaymentMethod::all()
+                : $user->paymentMethods()->get(),
         ];
     }
 }; ?>

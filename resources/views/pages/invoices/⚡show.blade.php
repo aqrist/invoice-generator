@@ -11,14 +11,18 @@ new #[Title('Invoice Preview')] class extends Component {
 
     public function mount(Invoice $invoice): void
     {
-        abort_unless($invoice->user_id === Auth::id(), 403);
+        abort_unless($invoice->user_id === Auth::id() || Auth::user()->isSuperAdmin(), 403);
         $this->invoice = $invoice->load(['customer', 'items', 'paymentMethod']);
     }
 
     public function with(): array
     {
+        $company = Auth::user()->isSuperAdmin()
+            ? $this->invoice->user->company
+            : Auth::user()->company;
+
         return [
-            'company' => Auth::user()->company,
+            'company' => $company,
         ];
     }
 }; ?>

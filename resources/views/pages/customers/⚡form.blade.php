@@ -19,7 +19,7 @@ new #[Title('Customer')] class extends Component {
     public function mount(?Customer $customer = null): void
     {
         if ($customer?->exists) {
-            abort_unless($customer->user_id === Auth::id(), 403);
+            abort_unless($customer->user_id === Auth::id() || Auth::user()->isSuperAdmin(), 403);
             $this->customer = $customer;
             $this->name = $customer->name;
             $this->company = $customer->company ?? '';

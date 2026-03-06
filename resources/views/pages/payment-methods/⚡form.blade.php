@@ -22,7 +22,7 @@ new #[Title('Payment Method')] class extends Component {
     public function mount(?PaymentMethod $paymentMethod = null): void
     {
         if ($paymentMethod?->exists) {
-            abort_unless($paymentMethod->user_id === Auth::id(), 403);
+            abort_unless($paymentMethod->user_id === Auth::id() || Auth::user()->isSuperAdmin(), 403);
             $this->paymentMethod = $paymentMethod;
             $this->bank_name = $paymentMethod->bank_name;
             $this->account_number = $paymentMethod->account_number;

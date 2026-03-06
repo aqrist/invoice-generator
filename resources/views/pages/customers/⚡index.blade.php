@@ -8,16 +8,22 @@ use Livewire\Component;
 new #[Title('Customers')] class extends Component {
     public string $search = '';
 
+    private function customerQuery(): \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return Auth::user()->isSuperAdmin()
+            ? Customer::query()
+            : Auth::user()->customers();
+    }
+
     public function deleteCustomer(int $customerId): void
     {
-        $customer = Auth::user()->customers()->findOrFail($customerId);
-        $customer->delete();
+        $this->customerQuery()->findOrFail($customerId)->delete();
     }
 
     public function with(): array
     {
         return [
-            'customers' => Auth::user()->customers()
+            'customers' => $this->customerQuery()
                 ->when($this->search, fn ($query) => $query->where('name', 'like', "%{$this->search}%")
                     ->orWhere('company', 'like', "%{$this->search}%")
                     ->orWhere('email', 'like', "%{$this->search}%"))

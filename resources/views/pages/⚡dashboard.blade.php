@@ -9,13 +9,17 @@ new #[Title('Dashboard')] class extends Component {
     public function with(): array
     {
         $user = Auth::user();
+        $invoiceQuery = $user->isSuperAdmin()
+            ? Invoice::query()
+            : $user->invoices();
 
         return [
-            'totalInvoices' => $user->invoices()->count(),
-            'totalRevenue' => $user->invoices()->where('status', 'paid')->sum('grand_total'),
-            'unpaidInvoices' => $user->invoices()->whereIn('status', ['sent', 'draft'])->count(),
-            'overdueInvoices' => $user->invoices()->where('status', 'overdue')->count(),
-            'recentInvoices' => $user->invoices()->with('customer')->latest('invoice_date')->limit(5)->get(),
+            'totalInvoices' => $invoiceQuery->count(),
+            'totalRevenue' => (clone $invoiceQuery)->where('status', 'paid')->sum('grand_total'),
+            'unpaidInvoices' => (clone $invoiceQuery)->whereIn('status', ['sent', 'draft'])->count(),
+            'overdueInvoices' => (clone $invoiceQuery)->where('status', 'overdue')->count(),
+            'recentInvoices' => (clone $invoiceQuery)->with('customer')->latest('invoice_date')->limit(5)->get(),
+            'isSuperAdmin' => $user->isSuperAdmin(),
         ];
     }
 }; ?>

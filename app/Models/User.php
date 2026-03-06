@@ -25,6 +25,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'is_superadmin',
     ];
 
     /**
@@ -49,12 +50,18 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_superadmin' => 'boolean',
         ];
     }
 
     /**
      * Get the user's initials
      */
+    public function isSuperAdmin(): bool
+    {
+        return (bool) $this->is_superadmin;
+    }
+
     public function initials(): string
     {
         return Str::of($this->name)

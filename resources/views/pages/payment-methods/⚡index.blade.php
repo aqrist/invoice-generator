@@ -1,19 +1,27 @@
 <?php
 
+use App\Models\PaymentMethod;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Payment Methods')] class extends Component {
+    private function paymentMethodQuery(): \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return Auth::user()->isSuperAdmin()
+            ? PaymentMethod::query()
+            : Auth::user()->paymentMethods();
+    }
+
     public function deletePaymentMethod(int $paymentMethodId): void
     {
-        Auth::user()->paymentMethods()->findOrFail($paymentMethodId)->delete();
+        $this->paymentMethodQuery()->findOrFail($paymentMethodId)->delete();
     }
 
     public function with(): array
     {
         return [
-            'paymentMethods' => Auth::user()->paymentMethods()->latest()->get(),
+            'paymentMethods' => $this->paymentMethodQuery()->latest()->get(),
         ];
     }
 }; ?>

@@ -11,10 +11,12 @@ class InvoicePdfController extends Controller
 {
     public function __invoke(Invoice $invoice): Response
     {
-        abort_unless($invoice->user_id === Auth::id(), 403);
+        abort_unless($invoice->user_id === Auth::id() || Auth::user()->isSuperAdmin(), 403);
 
         $invoice->load(['customer', 'items', 'paymentMethod']);
-        $company = Auth::user()->company;
+        $company = Auth::user()->isSuperAdmin()
+            ? $invoice->user->company
+            : Auth::user()->company;
 
         $pdf = Pdf::loadView('pdf.invoice', compact('invoice', 'company'));
 
